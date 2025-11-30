@@ -6781,10 +6781,12 @@ pre {
 .generated {
     max-width: 100%;
     overflow-wrap: break-word;
+    font-family: Consolas, "Courier New", monospace;
 }
 
 .part {
     padding: 10px 0;
+    font-family: Consolas, "Courier New", monospace;
 }
 
 .part:nth-of-type(2n+1) {
@@ -6793,6 +6795,16 @@ pre {
 
 .part:nth-of-type(2n+0) {
     background-color: #E9E8E6;
+}
+
+.sha256-output {
+    margin-top: 10px;
+    font-family: monospace;
+    word-break: break-all;
+}
+
+.sha256-output .hash-item {
+    margin-bottom: 6px;
 }
 </style>
         <meta content="Shamir Secret Sharing Scheme tool" name="description"/>
@@ -6828,6 +6840,8 @@ pre {
                     <ol class="generated">
                         <li>Enter your secret above.</li>
                     </ol>
+                    <button type="button" class="btn btn-default generate-sha">Generate SHA256</button>
+                    <div class="sha256-output text-muted">Hashes will appear here.</div>
                 </div>
                 <div class="col-sm-6">
                     <h2>Combine</h2>
@@ -7850,6 +7864,8 @@ pre {
     DOM.generated = $(".generated");
     DOM.parts = $(".parts");
     DOM.combined = $(".combined");
+    DOM.shaButton = $(".generate-sha");
+    DOM.shaOutput = $(".sha256-output");
 
     function init() {
         // Events
@@ -7857,11 +7873,13 @@ pre {
         DOM.total.addEventListener("input", generateParts);
         DOM.secret.addEventListener("input", generateParts);
         DOM.parts.addEventListener("input", combineParts);
+        DOM.shaButton.addEventListener("click", generateSha256ForParts);
     }
 
     function generateParts() {
         // Clear old generated
         DOM.generated.innerHTML = "";
+        DOM.shaOutput.textContent = "";
         // Get the input values
         var secret = DOM.secret.value;
         var secretHex = secrets.str2hex(secret);
@@ -7936,6 +7954,50 @@ pre {
         }
         // Display the combined parts
         DOM.combined.textContent = combined;
+    }
+
+    function generateSha256ForParts() {
+        if (!window.crypto || !window.crypto.subtle || typeof TextEncoder === "undefined") {
+            DOM.shaOutput.textContent = "SHA-256 is not available in this browser.";
+            return;
+        }
+
+        var parts = DOM.generated.querySelectorAll(".part");
+        if (!parts.length) {
+            DOM.shaOutput.textContent = "No parts available. Generate parts first.";
+            return;
+        }
+
+        DOM.shaOutput.textContent = "Calculating...";
+        var encoder = new TextEncoder();
+        var hashPromises = Array.prototype.map.call(parts, function (part, idx) {
+            return window.crypto.subtle.digest("SHA-256", encoder.encode(part.textContent)).then(function (buffer) {
+                return {
+                    label: "Part " + (idx + 1),
+                    hash: bufferToHex(buffer)
+                };
+            });
+        });
+
+        Promise.all(hashPromises).then(function (results) {
+            DOM.shaOutput.innerHTML = "";
+            var frag = document.createDocumentFragment();
+            results.forEach(function (item) {
+                var div = document.createElement("div");
+                div.className = "hash-item";
+                div.textContent = item.label + ": " + item.hash;
+                frag.appendChild(div);
+            });
+            DOM.shaOutput.appendChild(frag);
+        }).catch(function (e) {
+            DOM.shaOutput.textContent = "Error generating hashes: " + e.message;
+        });
+    }
+
+    function bufferToHex(buffer) {
+        return Array.prototype.map.call(new Uint8Array(buffer), function (x) {
+            return ("00" + x.toString(16)).slice(-2);
+        }).join("");
     }
 
     init();
